@@ -1,16 +1,16 @@
 /** Class that prints the Collatz sequence starting from a given number.
- *  @author YOUR NAME HERE
+ *  @author Yun Zhu
  */
 public class Collatz {
 
-    /** Buggy implementation of nextNumber! */
+    /** Return the next number */
     public static int nextNumber(int n) {
-        if (n  == 128) {
-            return 1;
-        } else if (n == 5) {
+        if (n  == 1) {
+            return n;
+        } else if (n % 2 != 0) {
             return 3 * n + 1;
         } else {
-            return n * 2;
+            return n / 2;
         }
     }
 
