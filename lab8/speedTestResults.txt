@@ -1,0 +1,2 @@
+Our hash table would speed up if we were able to use a logarithmic
+search over the TreeSet or a constant-time search over the HashSet.
