@@ -8,7 +8,7 @@ public class ArrayDeque<T> implements Deque<T>, Iterable<T> {
     private int nextFirst;
     private int nextLast;
     private int size;
-    private T[] items = (T[]) new Objects[8];
+    private T[] items = (T[]) new Object[8];
 
     public ArrayDeque() {
         nextFirst = 3;
@@ -58,7 +58,7 @@ public class ArrayDeque<T> implements Deque<T>, Iterable<T> {
     }
 
     private void resize(int newSize) {
-        T[] newItems = (T[]) new Objects[newSize];
+        T[] newItems = (T[]) new Object[newSize];
         int firstPos = Math.abs(newSize - size) / 2;
         System.arraycopy(items, nextFirst + 1, newItems, firstPos, size);
         items = newItems;
