@@ -11,15 +11,15 @@ public class ArrayDeque<T> implements Deque<T>, Iterable<T> {
     private T[] items = (T[]) new Objects[8];
 
     public ArrayDeque() {
-        nextFirst = size / 2 - 1;
-        nextLast = size / 2;
+        nextFirst = 3;
+        nextLast = 4;
         size = 0;
     }
 
     public ArrayDeque(T item) {
         items[3] = item;
-        nextFirst = size / 2 - 2;
-        nextLast = size / 2;
+        nextFirst = 2;
+        nextLast = 4;
         size = 1;
     }
 
@@ -53,7 +53,7 @@ public class ArrayDeque<T> implements Deque<T>, Iterable<T> {
             resize(8);
         }
         if (size < items.length / 4 && items.length >= 16) {
-            resize(size / 2);
+            resize(size * 2);
         }
     }
 
