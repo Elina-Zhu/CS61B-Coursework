@@ -1,8 +1,6 @@
 package deque;
 
-import java.util.Arrays;
 import java.util.Iterator;
-import java.util.Objects;
 
 public class ArrayDeque<T> implements Deque<T>, Iterable<T> {
     private int nextFirst;
@@ -14,13 +12,6 @@ public class ArrayDeque<T> implements Deque<T>, Iterable<T> {
         nextFirst = 3;
         nextLast = 4;
         size = 0;
-    }
-
-    public ArrayDeque(T item) {
-        items[3] = item;
-        nextFirst = 2;
-        nextLast = 4;
-        size = 1;
     }
 
     @Override
@@ -70,11 +61,11 @@ public class ArrayDeque<T> implements Deque<T>, Iterable<T> {
     public void printDeque() {
         int count = this.size();
         int p = nextFirst + 1;
-        if (count == 1){
+        if (count == 1) {
             System.out.println(items[p]);
             return;
         }
-        while(count > 1){
+        while (count > 1) {
             System.out.print(items[p] + " ");
             p = (p + 1) % items.length;
             count -= 1;
@@ -127,11 +118,11 @@ public class ArrayDeque<T> implements Deque<T>, Iterable<T> {
         if (o == this) {
             return true;
         }
-        if (!(o instanceof ArrayDeque)) {
+        if (!(o instanceof Deque)) {
             return false;
         }
-        ArrayDeque<T> other = (ArrayDeque<T>) o;
-        if (other.size() != this.size) {
+        Deque<T> other = (Deque<T>) o;
+        if (other.size() != this.size()) {
             return false;
         }
         for (int i = 0; i < size; i++) {
