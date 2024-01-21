@@ -15,7 +15,6 @@ public class GuitarHeroLite {
         GuitarString stringC = new GuitarString(CONCERT_C);
 
         while (true) {
-
             /* check if the user has typed a key; if so, process it */
             if (StdDraw.hasNextKeyTyped()) {
                 char key = StdDraw.nextKeyTyped();
@@ -38,4 +37,3 @@ public class GuitarHeroLite {
         }
     }
 }
-

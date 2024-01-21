@@ -80,4 +80,3 @@ public class TestGuitarString  {
         assertEquals("Wrong tic value. Try running the testTic method.", expected, s5, 0.001);
     }
 }
-
