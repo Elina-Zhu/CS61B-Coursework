@@ -1,6 +1,7 @@
 package byow.TileEngine;
 
 import java.awt.Color;
+import java.io.Serializable;
 
 /**
  * Contains constant tile objects, to avoid having to remake the same tiles in different parts of
@@ -16,10 +17,8 @@ import java.awt.Color;
  * characters. This is OK.
  */
 
-public class Tileset {
+public class Tileset implements Serializable {
     public static final TETile AVATAR = new TETile('@', Color.white, Color.black, "you");
-    public static final TETile WALL = new TETile('#', new Color(216, 128, 128), Color.darkGray,
-            "wall");
     public static final TETile FLOOR = new TETile('·', new Color(128, 192, 128), Color.black,
             "floor");
     public static final TETile NOTHING = new TETile(' ', Color.black, Color.black, "nothing");
@@ -33,6 +32,39 @@ public class Tileset {
     public static final TETile SAND = new TETile('▒', Color.yellow, Color.black, "sand");
     public static final TETile MOUNTAIN = new TETile('▲', Color.gray, Color.black, "mountain");
     public static final TETile TREE = new TETile('♠', Color.green, Color.black, "tree");
+    public static final TETile WALL = new TETile(' ', Color.gray, Color.darkGray, "wall");
+
+    public static final int levelWithLights = 8;
+    public static TETile[] LIGHTS = new TETile[levelWithLights];
+
+    public static void generateLightWithBlue() {
+        int r = 30;
+        int g = 144;
+        int b = 255;
+        Color backgroundColor = new Color(r, g, b);
+        LIGHTS[0] = new TETile('●', Color.white, backgroundColor, "light");
+        for (int i = 1; i < levelWithLights; i += 1) {
+            backgroundColor = new Color(r -= 4, g -= 20, b -= 30);
+            LIGHTS[i] = new TETile('.', Color.white, backgroundColor, "light");
+        }
+    }
+
+    public static void generateLightWithYellow() {
+        int r = 255;
+        int g = 255;
+        int b = 100;
+        Color backgroundColor = new Color(r, g, b);
+        LIGHTS[0] = new TETile('●', Color.white, backgroundColor, "light");
+        for (int i = 1; i < levelWithLights; i += 1) {
+            backgroundColor = new Color(r -= 20, g -= 20, b += 5);
+            LIGHTS[i] = new TETile('.', Color.white, backgroundColor, "light");
+        }
+    }
+
+    public static void generateLightWithoutBackground() {
+        LIGHTS[0] = new TETile('●', Color.white, Color.black, "light");
+        for (int i = 1; i < levelWithLights; i += 1) {
+            LIGHTS[i] = new TETile('.', Color.white, Color.black, "light");
+        }
+    }
 }
-
-

@@ -1,6 +1,7 @@
 package byow.TileEngine;
 
 import java.awt.Color;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -21,7 +22,7 @@ import byow.Core.RandomUtils;
  * to make your TETile class mutable, if you prefer.
  */
 
-public class TETile {
+public class TETile implements Serializable {
     private final char character; // Do not rename character or the autograder will break.
     private final Color textColor;
     private final Color backgroundColor;
@@ -36,8 +37,7 @@ public class TETile {
      * @param description The description of the tile, shown in the GUI on hovering over the tile.
      * @param filepath Full path to image to be used for this tile. Must be correct size (16x16)
      */
-    public TETile(char character, Color textColor, Color backgroundColor, String description,
-                  String filepath) {
+    public TETile(char character, Color textColor, Color backgroundColor, String description, String filepath) {
         this.character = character;
         this.textColor = textColor;
         this.backgroundColor = backgroundColor;
@@ -69,7 +69,6 @@ public class TETile {
     public TETile(TETile t, Color textColor) {
         this(t.character, textColor, t.backgroundColor, t.description, t.filepath);
     }
-
 
     /**
      * Draws the tile to the screen at location x, y. If a valid filepath is provided,

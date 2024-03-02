@@ -2,18 +2,79 @@ package byow.Core;
 
 import byow.TileEngine.TERenderer;
 import byow.TileEngine.TETile;
+import static byow.Core.OtherUtils.*;
 
-public class Engine {
+import java.io.*;
+
+public class Engine implements Serializable {
     TERenderer ter = new TERenderer();
     /* Feel free to change the width and height. */
-    public static final int WIDTH = 80;
-    public static final int HEIGHT = 30;
+    public static final int WIDTH = 90;
+    public static final int HEIGHT = 50;
+    private Long seed;
+    private Menu menu = new Menu(40, 60);
+    private boolean gameInit = true;
+    private TETile[][] world = new TETile[WIDTH][HEIGHT];
+    private WorldGenerator worldGenerator;
+
+    // The current working directory
+    public static final File CWD = new File(System.getProperty("user.dir"));
+    // The .save directory
+    public static final File SAVE_DIR = join(CWD, ".save");
+
+    public Engine() {
+    }
 
     /**
      * Method used for exploring a fresh world. This method should handle all inputs,
      * including inputs from the main menu.
      */
     public void interactWithKeyboard() {
+        if (gameInit) {
+            menu.drawMenu();
+        }
+        String inputString = "";
+        char typedKey;
+
+        while (true) {
+            typedKey = OtherUtils.getNextKey();
+            if (isNumber(typedKey) || isValidChar(typedKey)) {
+                inputString += typedKey;
+            }
+
+            // When in the menu interface
+            if (gameInit && typedKey == 'S') {
+                int stepIndex = inputString.indexOf("S");
+                inputString = inputString.substring(1, stepIndex);
+                break;
+            }
+            if (gameInit) {
+                if (typedKey == 'Q') {
+                    System.exit(0);
+                }
+                if (typedKey == 'N') {
+                    continue;
+                }
+                if (typedKey == 'L') {
+                    load();
+                    break;
+                }
+            }
+
+            // When the game is in progress
+            if (!gameInit && inputString.equals(":Q")) {
+                saveAndQuit();
+            }
+            if (!gameInit && inputString.length() == 1) {
+                if (inputString.equals("W") || inputString.equals("S")
+                        || inputString.equals("A") || inputString.equals("D")
+                        || inputString.equals("P")) {
+                    break;
+                }
+            }
+        }
+        renderWorld(inputString);
+        interactWithKeyboard();
     }
 
     /**
@@ -45,8 +106,77 @@ public class Engine {
         //
         // See proj3.byow.InputDemo for a demo of how you can make a nice clean interface
         // that works for many different input types.
+        switch (input) {
+            case "W":
+                return worldGenerator.moveAvatarThenGenerateWorld("W");
+            case "S":
+                return worldGenerator.moveAvatarThenGenerateWorld("S");
+            case "A":
+                return worldGenerator.moveAvatarThenGenerateWorld("A");
+            case "D":
+                return worldGenerator.moveAvatarThenGenerateWorld("D");
+            case "P":
+                return worldGenerator.turnOnOrOffLightInRooms();
+        }
 
-        TETile[][] finalWorldFrame = null;
-        return finalWorldFrame;
+        // Create a new world
+        if (seed == null) {
+            seed = Long.parseLong(input);
+            worldGenerator = new WorldGenerator(seed, world, false);
+            return worldGenerator.generateWorld();
+        }
+        // Load the previous world
+        return world;
+    }
+
+    private void load() {
+        Engine loadEngine = readObject(join(SAVE_DIR, "saveEngine.txt"), Engine.class);
+        ter = loadEngine.getTer();
+        seed = loadEngine.getSeed();
+        world = loadEngine.getWorld();
+        worldGenerator = loadEngine.getWorldGenerator();
+    }
+
+    private void saveAndQuit() {
+        if (!SAVE_DIR.exists()) {
+            SAVE_DIR.mkdir();
+        }
+        writeObject(join(SAVE_DIR, "saveEngine.txt"), this);
+        System.exit(0);
+    }
+
+    private void renderWorld(String inputString) {
+        world = interactWithInputString(inputString);
+        if (gameInit) {
+            gameInit = false;
+            renderWorldWithBeginning(world);
+        } else {
+            renderWorldWithMoving(world);
+        }
+    }
+
+    public void renderWorldWithBeginning(TETile[][] world) {
+        ter.initialize(WIDTH, HEIGHT);
+        ter.renderFrame(world);
+    }
+
+    public void renderWorldWithMoving(TETile[][] world) {
+        ter.renderFrame(world);
+    }
+
+    public TERenderer getTer() {
+        return ter;
+    }
+
+    public Long getSeed() {
+        return seed;
+    }
+
+    public TETile[][] getWorld() {
+        return world;
+    }
+
+    public WorldGenerator getWorldGenerator() {
+        return worldGenerator;
     }
 }
