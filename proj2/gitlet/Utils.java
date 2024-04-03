@@ -88,6 +88,16 @@ class Utils {
         return restrictedDelete(new File(file));
     }
 
+    /** Deletes the file named FILE if it exists and is not a directory.
+     *  Returns true if FILE was deleted, and false otherwise. */
+    static boolean unrestrictedDelete(File file) {
+        if (!file.isDirectory()) {
+            return file.delete();
+        } else {
+            return false;
+        }
+    }
+
     /* READING AND WRITING FILE CONTENTS */
 
     /** Return the entire contents of FILE as a byte array.  FILE must
@@ -191,15 +201,13 @@ class Utils {
     /* OTHER FILE UTILITIES */
 
     /** Return the concatentation of FIRST and OTHERS into a File designator,
-     *  analogous to the {@link java.nio.file.Paths.#get(String, String[])}
-     *  method. */
+     *  analogous to the java.nio.file.Paths.get(String, String[]) method. */
     static File join(String first, String... others) {
         return Paths.get(first, others).toFile();
     }
 
     /** Return the concatentation of FIRST and OTHERS into a File designator,
-     *  analogous to the {@link java.nio.file.Paths.#get(String, String[])}
-     *  method. */
+     *  analogous to the java.nio.file.Paths.#get(String, String[]) method. */
     static File join(File first, String... others) {
         return Paths.get(first.getPath(), others).toFile();
     }
@@ -235,5 +243,10 @@ class Utils {
     static void message(String msg, Object... args) {
         System.out.printf(msg, args);
         System.out.println();
+    }
+
+    public static void printAndExit(String msg) {
+        System.out.println(msg);
+        System.exit(0);
     }
 }
