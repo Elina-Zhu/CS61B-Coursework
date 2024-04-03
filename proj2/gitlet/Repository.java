@@ -185,17 +185,102 @@ public class Repository {
         cleanStaging();
     }
 
-    public static void merge(String branchName) {}
+    public static void merge(String branchName) {
+        branchName = convertRemoteBranchName(branchName);
+        // If there are staged additions or removals present
+        if (plainFilenamesIn(ADDITION_FOLDER).size() > 0 || plainFilenamesIn(REMOVED_FOLDER).size() > 0) {
+            printAndExit("You have uncommitted changes.");
+        }
+        // If a branch with the given name does not exist
+        if (!plainFilenamesIn(BRANCH_FOLDER).contains(branchName)) {
+            printAndExit("A branch with that name does not exist.");
+        }
+        // If attempting to merge a branch with itself
+        if (extractHEADThenGetActiveBranchName().equals(branchName)) {
+            printAndExit("Cannot merge a branch with itself.");
+        }
+        // If an untracked file in the current commit would be overwritten or deleted by the merge
+        checkUntrackedFileError();
+        // Get split commit
+        Commit split = getSplitCommit(branchName);
+        String splitCommitID = split.getCommitID();
+        // If the split point is the same commit as the given branch
+        if (splitCommitID.equals(extractBranchThenGetCommitID(branchName))) {
+            printAndExit("Given branch is an ancestor of the current branch.");
+        }
+        // If the split point is the current branch, then the effect is to check out the given branch
+        if (splitCommitID.equals(getCurrentCommit().getCommitID())){
+            checkoutWithBranchName(branchName);
+            printAndExit("Current branch fast-forwarded.");
+        }
 
-    public static void addRemote(String remoteName, String dirPathString) {}
+        // Get the target branch commit as "other"
+        String otherCommitID = extractBranchThenGetCommitID(branchName);
+        Commit other = readObject(join(COMMITS_FOLDER, otherCommitID), Commit.class);
+        mergeHelper(split, other);
+        commitHelper(getMergeMessage(branchName), true, branchName);
+    }
 
-    public static void rmRemote(String remoteName) {}
+    public static void addRemote(String remoteName, String dirPathString) {
+        // If a remote with the given name already exists
+        if (plainFilenamesIn(REMOTE_FOLDER).contains(remoteName)) {
+            printAndExit("A remote with that name already exists.");
+        }
 
-    public static void push(String remoteName, String remoteBranchName) {}
+        Remote remote = new Remote(remoteName, dirPathString);
+        saveObj(REMOTE_FOLDER, remoteName, remote);
+    }
 
-    public static void fetch(String remoteName, String remoteBranchName) {}
+    public static void rmRemote(String remoteName) {
+        // If a remote with the given name already exists, print the error message and exit
+        if (!plainFilenamesIn(REMOTE_FOLDER).contains(remoteName)) {
+            printAndExit("A remote with that name does not exist.");
+        }
 
-    public static void pull(String remoteName, String remoteBranchName) {}
+        for (String fileName : plainFilenamesIn(REMOTE_FOLDER)) {
+            if (fileName.equals(remoteName)) {
+                unrestrictedDelete(join(REMOTE_FOLDER, fileName));
+            }
+        }
+    }
+
+    public static void push(String remoteName, String remoteBranchName) {
+        Remote remote = readObject(join(REMOTE_FOLDER, remoteName), Remote.class);
+        // If the remote .gitlet directory does not exist
+        validateRemoteDir(remote);
+        File remoteDir = remote.getRemoteDir();
+        // If the remote branch's head is not in the history of the current local head
+        Pointer remoteActiveBranch = readObject(join(remoteDir, "branch", remoteBranchName), Pointer.class);
+        // Note: HEAD point to branch, branch point to commit
+        String remoteHeadID = remoteActiveBranch.getCommitID();
+        if (!isRemoteHeadIDInHistoryOfLocal(remoteHeadID, getCurrentCommit())) {
+            printAndExit("Please pull down remote changes before pushing.");
+        }
+        Commit localCurrentCommit = getCurrentCommit();
+        pushHelper(remoteDir, localCurrentCommit, remoteHeadID);
+        saveRemoteBranch(remoteDir, remoteBranchName, localCurrentCommit.getCommitID());
+        saveRemoteHEAD(remoteDir, remoteBranchName, getInitCommitID());
+    }
+
+    public static void fetch(String remoteName, String remoteBranchName) {
+        Remote remote = readObject(join(REMOTE_FOLDER, remoteName), Remote.class);
+        // If the remote .gitlet directory does not exist
+        validateRemoteDir(remote);
+        // If the remote Gitlet repository does not have the given branch name
+        if (!remote.getBranchNames().contains(remoteBranchName)) {
+            printAndExit("That remote does not have that branch.");
+        }
+        File remoteDir = remote.getRemoteDir();
+        Pointer branch = readObject(join(remoteDir, "branch", remoteBranchName), Pointer.class);
+        Commit commit = readObject(join(remoteDir, "commits", branch.getCommitID()), Commit.class);
+        fetchHelper(remoteDir, commit);
+        saveBranch(remoteName + "\\" + remoteBranchName, branch.getCommitID());
+    }
+
+    public static void pull(String remoteName, String remoteBranchName) {
+        fetch(remoteName, remoteBranchName);
+        merge(remoteName + "/" +remoteBranchName);
+    }
 
     /** The helper methods */
     public static void setupPersistence(String msg) {
@@ -291,6 +376,11 @@ public class Repository {
             return;
         }
         printCommitLog(commit);
+        List<String> parentIDs = commit.getParentIDs();
+        if (parentIDs.size() > 0) {
+            Commit parentCommit = readObject(join(COMMITS_FOLDER, parentIDs.get(0)), Commit.class);
+            printCommitLogInActiveBranch(parentCommit);
+        }
     }
 
     private static void printCommitLog(Commit commit) {
@@ -518,6 +608,7 @@ public class Repository {
             }
         }
 
+        // If the file does not in the commit
         System.out.println("File does not exist in that commit.");
     }
 
@@ -527,6 +618,276 @@ public class Repository {
             branchName = branchName.substring(0, indexOfSlash) + "\\" + branchName.substring(indexOfSlash + 1);
         }
         return branchName;
+    }
+
+    /** The helper methods for the merge command. */
+    private static Commit getSplitCommit(String branchName) {
+        // Mark the current (head) branch
+        Commit headCommit = getCurrentCommit();
+        markBranch(headCommit, 0);
+        // Get and mark the other branch commit
+        String otherCommitID = extractBranchThenGetCommitID(branchName);
+        Commit otherCommit = readObject(join(COMMITS_FOLDER, otherCommitID), Commit.class);
+        markBranch(otherCommit, 0);
+        // Get the smallest split commit
+        Commit splitCommit = readObject(join(COMMITS_FOLDER, getInitCommitID()), Commit.class);
+        int splitDistance = splitCommit.getDistance();
+        for (String commitID : plainFilenamesIn(COMMITS_FOLDER)) {
+            Commit commit = readObject(join(COMMITS_FOLDER, commitID), Commit.class);
+            if (commit.getMarkedCount() == 2 && commit.getDistance() < splitDistance) {
+                splitCommit = commit;
+                splitDistance = commit.getDistance();
+            }
+        }
+        // Reset marked count and distance in all commits
+        for (String commitID : plainFilenamesIn(COMMITS_FOLDER)) {
+            Commit commit = readObject(join(COMMITS_FOLDER, commitID), Commit.class);
+            commit.resetMarkedCount();
+            commit.resetDistance();
+            saveObj(COMMITS_FOLDER, commit.getCommitID(), commit);
+        }
+        return splitCommit;
+    }
+
+    private static void markBranch(Commit branchCommit, int distance) {
+        branchCommit.updatedMarkedCount();
+        branchCommit.updatedDistance(distance);
+        saveObj(COMMITS_FOLDER, branchCommit.getCommitID(), branchCommit);
+        distance += 1;
+        for (String parentID : branchCommit.getParentIDs()) {
+            branchCommit = readObject(join(COMMITS_FOLDER, parentID), Commit.class);
+            markBranch(branchCommit, distance);
+        }
+    }
+
+    public static void mergeHelper(Commit split, Commit other){
+        Commit head = getCurrentCommit();
+        Set<String> allFileNames = getAllFileNames(split, head, other);
+        rulesDealFiles(split, head, other, allFileNames);
+    }
+
+    private static void rulesDealFiles(Commit split, Commit head, Commit other, Set<String> allFileNames) {
+        List<String> fileNamesInSplit = split.getCopiedFileNames();
+        List<String> fileNamesInHead = head.getCopiedFileNames();
+        List<String> fileNamesInOther = other.getCopiedFileNames();
+
+        for (String fileName : allFileNames) {
+            String fileIDInHead = null;
+            String fileIDInOther = null;
+            String fileIDInSplit = null;
+            Blob headBlob = null;
+            Blob otherBlob = null;
+            // Get head blob with fileID and other blob with file ID
+            for (Blob blob : head.getBlobs()) {
+                if (blob.getCopiedFileName().equals(fileName)) {
+                    headBlob = blob;
+                    fileIDInHead = blob.getCopiedFileID();
+                    break;
+                }
+            }
+            for (Blob blob : other.getBlobs()) {
+                if (blob.getCopiedFileName().equals(fileName)) {
+                    otherBlob = blob;
+                    fileIDInOther = blob.getCopiedFileID();
+                    break;
+                }
+            }
+            for (Blob blob : split.getBlobs()) {
+                if (blob.getCopiedFileName().equals(fileName)) {
+                    fileIDInSplit = blob.getCopiedFileID();
+                    break;
+                }
+            }
+
+            boolean isHeadModified = (fileIDInHead != null) && (!fileIDInHead.equals(fileIDInSplit));
+            boolean isOtherModified = (fileIDInOther != null) && (!fileIDInOther.equals(fileIDInSplit));
+
+            if (fileNamesInSplit.contains(fileName) && fileNamesInHead.contains(fileName) && fileNamesInOther.contains(fileName)) {
+                // 1. Modified in other but not head -> stage the file for addition and put it to the cwd
+                if (isOtherModified && !isHeadModified) {
+                    saveWorkingFile(fileName, otherBlob.getCopiedFileContent());
+                    saveAdditionFile(fileName, otherBlob.getCopiedFileContent());
+                    continue;
+                }
+                // 2. Modified in head but not other -> stage the file for addition and put it to the cwd
+                if (isHeadModified && !isOtherModified) {
+                    saveWorkingFile(fileName, headBlob.getCopiedFileContent());
+                    saveAdditionFile(fileName, headBlob.getCopiedFileContent());
+                    continue;
+                }
+            }
+
+            // 5. Neither in split nor other but in head -> stage file from head for addition
+            if (!fileNamesInSplit.contains(fileName) && !fileNamesInOther.contains(fileName) && fileNamesInHead.contains(fileName)) {
+                saveWorkingFile(fileName, headBlob.getCopiedFileContent());
+                saveAdditionFile(fileName, headBlob.getCopiedFileContent());
+                continue;
+            }
+
+            // 6. Neither in split nor head but in other -> stage file from other for addition
+            if (!fileNamesInSplit.contains(fileName) && !fileNamesInHead.contains(fileName) && fileNamesInOther.contains(fileName)) {
+                saveWorkingFile(fileName, otherBlob.getCopiedFileContent());
+                saveAdditionFile(fileName, otherBlob.getCopiedFileContent());
+                continue;
+            }
+
+            // 7a. Unmodified in head but not present in other -> stage file from head for removed
+            // 7b. Modified in head but not present in other -> conflict
+            if (fileNamesInSplit.contains(fileName) && fileNamesInHead.contains(fileName) && !fileNamesInOther.contains(fileName)) {
+                if (!isHeadModified) {
+                    saveRemovedFile(fileName, headBlob.getCopiedFileContent());
+                    // delete it in working
+                    if (hasFileNameInCWD(fileName)) {
+                        restrictedDelete(join(CWD, fileName));
+                    }
+                } else {
+                    makeConflictFile(fileName, headBlob.getCopiedFileContent(), "");
+                }
+                continue;
+            }
+
+            // 8a. Unmodified in other but not present in head -> stage file from other for removed
+            // 8b. Modified in other but not present in head -> conflict
+            if (fileNamesInSplit.contains(fileName) && fileNamesInOther.contains(fileName) && !fileNamesInHead.contains(fileName)) {
+                if (!isOtherModified) {
+                    saveRemovedFile(fileName, otherBlob.getCopiedFileContent());
+                    // delete it in working
+                    if (hasFileNameInCWD(fileName)) {
+                        restrictedDelete(join(CWD, fileName));
+                    }
+                } else {
+                    makeConflictFile(fileName, "", otherBlob.getCopiedFileContent());
+                }
+                continue;
+            }
+
+            if (fileNamesInOther.contains(fileName) && fileNamesInHead.contains(fileName)) {
+                if (isOtherModified && isHeadModified) {
+                    // 3. Modified in head and other in the same way -> stage file from head/other for addition and put it to the cwd
+                    if (fileIDInHead.equals(fileIDInOther)) {
+                        saveWorkingFile(fileName, headBlob.getCopiedFileContent());
+                        saveAdditionFile(fileName, headBlob.getCopiedFileContent());
+                        // 4. Modified in head and other in different ways -> Store conflict file to cwd and addition folder
+                    } else {
+                        makeConflictFile(fileName, headBlob.getCopiedFileContent(), otherBlob.getCopiedFileContent());
+                    }
+                }
+            }
+        }
+    }
+
+    private static Set<String> getAllFileNames(Commit split, Commit head, Commit other) {
+        Set<String> fileNames = new HashSet<>();
+        for (String fileName : split.getCopiedFileNames()) {
+            fileNames.add(fileName);
+        }
+        for (String fileName : head.getCopiedFileNames()) {
+            fileNames.add(fileName);
+        }
+        for (String fileName : other.getCopiedFileNames()) {
+            fileNames.add(fileName);
+        }
+        return fileNames;
+    }
+
+    private static void makeConflictFile(String fileName, String fileContentsFromHead, String fileContentsFromOther) {
+        String contents = "<<<<<<< HEAD" + "\n"
+                + fileContentsFromHead
+                + "=======" + "\n"
+                + fileContentsFromOther
+                +">>>>>>>" + "\n";
+        saveWorkingFile(fileName, contents);
+        saveAdditionFile(fileName, contents);
+        System.out.println("Encountered a merge conflict.");
+    }
+
+    private static String deConvertRemoteBranchName(String branchName) {
+        if (branchName.contains("\\")) {
+            int indexOfBackslash = branchName.indexOf("\\");
+            branchName = branchName.substring(0, indexOfBackslash) + "/" + branchName.substring(indexOfBackslash + 1);
+        }
+        return branchName;
+    }
+
+    private static String getMergeMessage(String branchName) {
+        branchName = deConvertRemoteBranchName(branchName);
+        String mergeMessage ="Merged " + branchName + " into "+ extractHEADThenGetActiveBranchName() + ".";
+        return mergeMessage;
+    }
+
+    /** The helper methods for the push command. */
+    /** Push all commits and blobs from remote repo by recursion. */
+    private static void pushHelper(File remoteDir, Commit commit, String remoteHeadID) {
+        String commitID = commit.getCommitID();
+        File RemoteCommitsFolder = join(remoteDir, "commits");
+        if (commitID.equals(remoteHeadID) || plainFilenamesIn(RemoteCommitsFolder).contains(commitID)) {
+            return;
+        }
+        // Save commit
+        if (!plainFilenamesIn(RemoteCommitsFolder).contains(commitID)) {
+            saveObj(RemoteCommitsFolder, commitID, commit);
+        }
+        // Save blobs with comparing
+        for (String blobID : commit.getBlobIDs()) {
+            Blob blob = readObject(join(BLOB_FOLDER, getDirID(blobID), blobID), Blob.class);
+            saveDirAndObjInBlobs(blob, join(remoteDir, "blobs"), blob.getBlobID());
+        }
+        // Push from parent commits
+        for (String parentID : commit.getParentIDs()) {
+            Commit parentCommit = readObject(join(COMMITS_FOLDER, parentID), Commit.class);
+            pushHelper(remoteDir, parentCommit, remoteHeadID);
+        }
+    }
+
+    private static boolean isRemoteHeadIDInHistoryOfLocal(String remoteHeadID, Commit commit) {
+        boolean isInHistoryOfLocal = commit.getCommitID().equals(remoteHeadID);
+        // Check parent commits
+        for (String parentID : commit.getParentIDs()) {
+            Commit parentCommit = readObject(join(COMMITS_FOLDER, parentID), Commit.class);
+            return isInHistoryOfLocal || isRemoteHeadIDInHistoryOfLocal(remoteHeadID, parentCommit);
+        }
+        return isInHistoryOfLocal;
+    }
+
+    // Save or change a branch in remote
+    public static void saveRemoteBranch(File remoteDir, String branchName, String commitID) {
+        Pointer branch = new Pointer(false, branchName, commitID);
+        saveObj(join(remoteDir, "branch"), branchName, branch);
+    }
+
+    // Save or change HEAD in remote
+    public static void saveRemoteHEAD(File remoteDir, String activeBranchName, String initCommitID) {
+        Pointer HEAD = new Pointer(true, activeBranchName, initCommitID);
+        saveObj(remoteDir, activeBranchName, HEAD);
+    }
+
+    /** The helper methods for the fetch command. */
+    /** Fetch all commits and blobs from remote repo by recursion. */
+    private static void fetchHelper(File remoteDir, Commit commit) {
+        String commitID = commit.getCommitID();
+        if (commit == null || plainFilenamesIn(COMMITS_FOLDER).contains(commitID)) {
+            return;
+        }
+        // Save commit
+        if (!plainFilenamesIn(COMMITS_FOLDER).contains(commitID)) {
+            saveObj(COMMITS_FOLDER, commitID, commit);
+        }
+        // Save blobs with comparing
+        for (String blobID : commit.getBlobIDs()) {
+            Blob blob = readObject(join(remoteDir, "blobs", getDirID(blobID), blobID), Blob.class);
+            saveDirAndObjInBlobs(blob, BLOB_FOLDER, blob.getBlobID());
+        }
+        // Fetch from parent commits
+        for (String parentID : commit.getParentIDs()) {
+            Commit parentCommit = readObject(join(remoteDir, "commits", parentID), Commit.class);
+            fetchHelper(remoteDir, parentCommit);
+        }
+    }
+
+    private static void validateRemoteDir(Remote remote) {
+        if (!remote.getRemoteDir().exists()) {
+            printAndExit("Remote directory not found.");
+        }
     }
 
     /** The helper methods for checking the errors. */
