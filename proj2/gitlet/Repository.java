@@ -42,6 +42,10 @@ public class Repository {
             printAndExit("File does not exist.");
         }
 
+        if (plainFilenamesIn(REMOVED_FOLDER).contains(fileName)) {
+            unrestrictedDelete(join(REMOVED_FOLDER, fileName));
+        }
+
         String fileID = getFileID(join(CWD, fileName));
         for (Blob blob : getCurrentCommit().getBlobs()) {
             if (fileID.equals(blob.getCopiedFileID())) {
@@ -105,16 +109,16 @@ public class Repository {
     }
 
     public static void globalLog() {
-        for (String ID : plainFilenamesIn(COMMITS_FOLDER)) {
-            Commit commit = readObject(join(COMMITS_FOLDER, ID), Commit.class);
+        for (String id : plainFilenamesIn(COMMITS_FOLDER)) {
+            Commit commit = readObject(join(COMMITS_FOLDER, id), Commit.class);
             printCommitLog(commit);
         }
     }
 
     public static void find(String message) {
         boolean hasCommit = false;
-        for (String ID : plainFilenamesIn(COMMITS_FOLDER)) {
-            Commit commit = readObject(join(COMMITS_FOLDER, ID), Commit.class);
+        for (String id : plainFilenamesIn(COMMITS_FOLDER)) {
+            Commit commit = readObject(join(COMMITS_FOLDER, id), Commit.class);
             if (commit.getMessage().equals(message)) {
                 System.out.println(commit.getCommitID());
                 hasCommit = true;
@@ -175,7 +179,14 @@ public class Repository {
 
         // 2. Check out all the files tracked by the given commit
         for (String copiedFileName : commit.getCopiedFileNames()) {
-            checkoutHelper(commit, copiedFileName);
+            for (Blob blob : commit.getBlobs()) {
+                if (copiedFileName.equals(blob.getCopiedFileName())) {
+                    // Put the file in the CWD or overwrite the old version
+                    String content = blob.getCopiedFileContent();
+                    saveContent(CWD, copiedFileName, content);
+                    return;
+                }
+            }
         }
 
         // 3. Move the current branch's head to that commit node
@@ -209,7 +220,7 @@ public class Repository {
             printAndExit("Given branch is an ancestor of the current branch.");
         }
         // If the split point is the current branch, then the effect is to check out the given branch
-        if (splitCommitID.equals(getCurrentCommit().getCommitID())){
+        if (splitCommitID.equals(getCurrentCommit().getCommitID())) {
             checkoutWithBranchName(branchName);
             printAndExit("Current branch fast-forwarded.");
         }
@@ -279,7 +290,7 @@ public class Repository {
 
     public static void pull(String remoteName, String remoteBranchName) {
         fetch(remoteName, remoteBranchName);
-        merge(remoteName + "/" +remoteBranchName);
+        merge(remoteName + "/" + remoteBranchName);
     }
 
     /** The helper methods */
@@ -581,9 +592,9 @@ public class Repository {
 
     private static void checkoutWithCommitIDAndFileName(String commitID, String fileName) {
         if (commitID.length() == 8) {
-            for (String ID : plainFilenamesIn(COMMITS_FOLDER)) {
-                if (ID.substring(0, 8).equals(commitID)) {
-                    commitID = ID;
+            for (String id : plainFilenamesIn(COMMITS_FOLDER)) {
+                if (id.substring(0, 8).equals(commitID)) {
+                    commitID = id;
                     break;
                 }
             }
@@ -660,7 +671,7 @@ public class Repository {
         }
     }
 
-    public static void mergeHelper(Commit split, Commit other){
+    public static void mergeHelper(Commit split, Commit other) {
         Commit head = getCurrentCommit();
         Set<String> allFileNames = getAllFileNames(split, head, other);
         rulesDealFiles(split, head, other, allFileNames);
@@ -795,7 +806,7 @@ public class Repository {
                 + fileContentsFromHead
                 + "=======" + "\n"
                 + fileContentsFromOther
-                +">>>>>>>" + "\n";
+                + ">>>>>>>" + "\n";
         saveWorkingFile(fileName, contents);
         saveAdditionFile(fileName, contents);
         System.out.println("Encountered a merge conflict.");
@@ -811,7 +822,7 @@ public class Repository {
 
     private static String getMergeMessage(String branchName) {
         branchName = deConvertRemoteBranchName(branchName);
-        String mergeMessage ="Merged " + branchName + " into "+ extractHEADThenGetActiveBranchName() + ".";
+        String mergeMessage = "Merged " + branchName + " into " + extractHEADThenGetActiveBranchName() + ".";
         return mergeMessage;
     }
 
@@ -819,13 +830,13 @@ public class Repository {
     /** Push all commits and blobs from remote repo by recursion. */
     private static void pushHelper(File remoteDir, Commit commit, String remoteHeadID) {
         String commitID = commit.getCommitID();
-        File RemoteCommitsFolder = join(remoteDir, "commits");
-        if (commitID.equals(remoteHeadID) || plainFilenamesIn(RemoteCommitsFolder).contains(commitID)) {
+        File remoteCommitsFolder = join(remoteDir, "commits");
+        if (commitID.equals(remoteHeadID) || plainFilenamesIn(remoteCommitsFolder).contains(commitID)) {
             return;
         }
         // Save commit
-        if (!plainFilenamesIn(RemoteCommitsFolder).contains(commitID)) {
-            saveObj(RemoteCommitsFolder, commitID, commit);
+        if (!plainFilenamesIn(remoteCommitsFolder).contains(commitID)) {
+            saveObj(remoteCommitsFolder, commitID, commit);
         }
         // Save blobs with comparing
         for (String blobID : commit.getBlobIDs()) {
@@ -857,8 +868,8 @@ public class Repository {
 
     // Save or change HEAD in remote
     public static void saveRemoteHEAD(File remoteDir, String activeBranchName, String initCommitID) {
-        Pointer HEAD = new Pointer(true, activeBranchName, initCommitID);
-        saveObj(remoteDir, activeBranchName, HEAD);
+        Pointer head = new Pointer(true, activeBranchName, initCommitID);
+        saveObj(remoteDir, activeBranchName, head);
     }
 
     /** The helper methods for the fetch command. */
@@ -891,21 +902,14 @@ public class Repository {
     }
 
     /** The helper methods for checking the errors. */
-    private static void checkNotExistSameFileInFolder(String fileName, File FOLDER, String message) {
-        boolean existSameFile = false;
-        for (String name : plainFilenamesIn(FOLDER)) {
-            if (name.equals(fileName)) {
-                existSameFile = true;
-                break;
-            }
-        }
-        if (!existSameFile) {
+    private static void checkNotExistSameFileInFolder(String fileName, File folder, String message) {
+        if (!plainFilenamesIn(folder).contains(fileName)) {
             printAndExit(message);
         }
     }
 
-    private static void checkExistSameFileInFolder(String fileName, File FOLDER, String message) {
-        for (String name : plainFilenamesIn(FOLDER)) {
+    private static void checkExistSameFileInFolder(String fileName, File folder, String message) {
+        for (String name : plainFilenamesIn(folder)) {
             if (name.equals(fileName)) {
                 printAndExit(message);
             }
@@ -913,14 +917,7 @@ public class Repository {
     }
 
     private static void checkNotExistSameFileInCommit(String fileName, Commit commit, String message) {
-        boolean fileExist = false;
-        for (String name : commit.getCopiedFileNames()) {
-            if (fileName.equals(name)) {
-                fileExist = true;
-                break;
-            }
-        }
-        if (!fileExist) {
+        if (!commit.getCopiedFileNames().contains(fileName)) {
             printAndExit(message);
         }
     }
@@ -959,13 +956,13 @@ public class Repository {
     }
 
     public static String getInitCommitID() {
-        Pointer HEAD = readObject(join(GITLET_DIR, HEADNAME), Pointer.class);
-        return HEAD.getInitCommitID();
+        Pointer head = readObject(join(GITLET_DIR, HEADNAME), Pointer.class);
+        return head.getInitCommitID();
     }
 
     public static String extractHEADThenGetActiveBranchName() {
-        Pointer HEAD = readObject(join(GITLET_DIR, HEADNAME), Pointer.class);
-        return HEAD.getActiveBranchName();
+        Pointer head = readObject(join(GITLET_DIR, HEADNAME), Pointer.class);
+        return head.getActiveBranchName();
     }
 
     public static String extractActiveBranchThenGetCurrentCommitID(String activeBranchName) {
@@ -988,7 +985,7 @@ public class Repository {
     }
 
     public static void saveHEAD(String activeBranchName, String initCommitID) {
-        Pointer HEAD = new Pointer(true, activeBranchName, initCommitID);
-        HEAD.saveHEADFile();
+        Pointer head = new Pointer(true, activeBranchName, initCommitID);
+        head.saveHeadFile();
     }
 }

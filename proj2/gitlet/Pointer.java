@@ -11,13 +11,13 @@ public class Pointer implements Serializable {
     private String initCommitID;
     private String activeBranchName;
 
-    public Pointer(boolean isHead, String Name, String ID) {
+    public Pointer(boolean isHead, String name, String id) {
         if (isHead) {
-            this.initCommitID = ID;
-            this.activeBranchName = Name;
+            this.initCommitID = id;
+            this.activeBranchName = name;
         } else {
-            this.commitID = ID;
-            this.branchName = Name;
+            this.commitID = id;
+            this.branchName = name;
         }
     }
 
@@ -28,7 +28,7 @@ public class Pointer implements Serializable {
     }
 
     // Save HEAD by headName
-    public void saveHEADFile() {
+    public void saveHeadFile() {
         saveObj(GITLET_DIR, HEADNAME, this);
     }
 

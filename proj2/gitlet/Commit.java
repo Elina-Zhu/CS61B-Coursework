@@ -53,7 +53,8 @@ public class Commit implements Serializable {
 
     private void getInfoFromParent() {
         if (this.parentIDs.size() == 1) {
-            Commit parentCommit = readObject(join(COMMITS_FOLDER, this.parentIDs.get(0)), Commit.class);
+            Commit parentCommit = readObject(join(COMMITS_FOLDER, this.parentIDs.get(0)),
+                    Commit.class);
             this.blobIDs.addAll(parentCommit.getBlobIDs());
             this.copiedFileIDs.addAll(parentCommit.getCopiedFileIDs());
             this.copiedFileNames.addAll(parentCommit.getCopiedFileNames());
@@ -66,13 +67,14 @@ public class Commit implements Serializable {
         for (String fileName : plainFilenamesIn(ADDITION_FOLDER)) {
             File file = join(ADDITION_FOLDER, fileName);
             String fileID = getFileID(file);
-            // For the file with different filename and different fileID, add it from staging
+            // Different filename and different fileID -> add the file from staging
             if (!this.copiedFileNames.contains(fileName) && !this.copiedFileIDs.contains(fileID)) {
                 this.copiedFileNames.add(fileName);
                 this.copiedFileIDs.add(fileID);
                 this.blobIDs.add(makeBlob(file).getBlobID());
-                // For the file with the same filename but different fileID, use the file from staging to replace the file from parent
-            } else if (this.copiedFileNames.contains(fileName) && !this.copiedFileIDs.contains(fileID)) {
+                // Same filename but different fileID -> use the file from staging to replace the file from parent
+            } else if (this.copiedFileNames.contains(fileName)
+                    && !this.copiedFileIDs.contains(fileID)) {
                 // Delete the file (copiedFileID and blobID) from parent
                 for (String blobID : this.blobIDs) {
                     Blob blob = readObject(join(BLOB_FOLDER, getDirID(blobID), blobID), Blob.class);
@@ -86,7 +88,7 @@ public class Commit implements Serializable {
                 this.copiedFileIDs.add(fileID);
                 this.blobIDs.add(makeBlob(file).getBlobID());
             }
-            // For the file with the same filename and same fileID, do nothing
+            // Same filename and same fileID -> do nothing
         }
 
         // Then consider the REMOVED_FOLDER
@@ -95,7 +97,7 @@ public class Commit implements Serializable {
         for (String fileName : plainFilenamesIn(REMOVED_FOLDER)) {
             File file = join(REMOVED_FOLDER, fileName);
             String fileID = getFileID(file);
-            // For the file with the same filename and same fileID, remove it from the new commit
+            // Same filename and same fileID, remove it from the new commit
             if (this.copiedFileNames.contains(fileName) && this.copiedFileIDs.contains(fileID)) {
                 this.copiedFileNames.remove(fileName);
                 this.copiedFileIDs.remove(fileID);
@@ -130,8 +132,8 @@ public class Commit implements Serializable {
 
     public HashSet<Blob> getBlobs() {
         HashSet<Blob> blobs = new HashSet<>();
-        for (String ID : blobIDs) {
-            Blob blob = readObject(join(BLOB_FOLDER, getDirID(ID), ID), Blob.class);
+        for (String id : blobIDs) {
+            Blob blob = readObject(join(BLOB_FOLDER, getDirID(id), id), Blob.class);
             blobs.add(blob);
         }
         return blobs;
@@ -153,8 +155,8 @@ public class Commit implements Serializable {
         this.distance = 0;
     }
 
-    public void updatedDistance(int distance) {
-        this.distance += distance;
+    public void updatedDistance(int n) {
+        this.distance += n;
     }
 
     public int getDistance() {
