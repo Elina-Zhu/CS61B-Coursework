@@ -587,7 +587,7 @@ public class Repository {
             checkoutHelper(branchCommit, copiedFileName);
         }
         // Also, at the end of this command, the given branch will now be considered the current branch (HEAD).
-        saveHEAD(branchName, getInitCommitID());
+        saveHEAD(branchName, commitID);
     }
 
     private static void checkoutWithCommitIDAndFileName(String commitID, String fileName) {
